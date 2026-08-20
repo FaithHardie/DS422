@@ -152,7 +152,7 @@ ggplot(data = eagle_i_hawaii, aes (x = run_start_time, y = customers_out)) +
   theme_bw()
 ```
 
-#### Map Outages 
+#### Map Outages
 
 ```{r}
 library(tigris)
@@ -231,6 +231,6 @@ This seems like a good start to understanding power outages, but is fairly limit
 
 **BlackMarbleR** is a R package that provides a simple way to use nighttime lights data from NASA’s Black Marble. [Black Marble](https://blackmarble.gsfc.nasa.gov/) is a [NASA Earth Science Data Systems (ESDS)](https://www.earthdata.nasa.gov/) project that provides a product suite of daily, monthly and yearly global [nighttime lights](https://www.earthdata.nasa.gov/topics/human-dimensions/nighttime-lights). This package automates the process of downloading all relevant tiles from the [NASA LAADS DAAC](https://ladsweb.modaps.eosdis.nasa.gov/) to cover a region of interest, converting and mosaicing the raw files (in HDF5 format) to georeferenced rasters.
 
-#### Your Turn 
+#### Your Turn
 
 [Follow the steps here](https://worldbank.github.io/blackmarbler/#installation) to generate the first 2 visualizations of nighttime lights in Ghana (map and bar chart). Stop at "Workflow to Update Data". We will tweak this analysis to measure power outages in Honolulu county pre/during/post severe weather events with known outages from the eagle-i dataset
