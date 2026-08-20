@@ -23,6 +23,7 @@ library(arrow)
 library(tigris)
 library(sf)
 library(ggiraph)
+library(plotly)
 ```
 
 I downloaded the original dataset from the link above, filtered to only Hawaii outages, and converted the csv to a feather file to shrink the size for ease of sharing and loading
@@ -63,14 +64,16 @@ customers_out_by_county <- eagle_i_hawaii |>
 ##### Your turn - Lets make a bar chart with ggplot
 
 ```{r}
-ggplot(customers_out_by_county_with_pop, aes(y = county, x = outages_per_1000)) +
-  geom_col(fill = "firebrick") +
-  labs(
-    title = "Power Outages per 1,000 Residents by County",
-    x = "Outages per 1,000 residents",
-    y = NULL
-  ) +
-  theme_minimal()
+ggplot(data= customers_out_by_county, aes(y=county, x=total_customers_out)) +geom_col()
+
+#ggplot(customers_out_by_county_with_pop, aes(y = county, x = outages_per_1000)) +
+ # geom_col(fill = "firebrick") +
+  #labs(
+   # title = "Power Outages per 1,000 Residents by County",
+    ##x = "Outages per 1,000 residents",
+    #y = NULL
+  #) +
+  #theme_minimal()
 ```
 
 ##### What if we normalize?
@@ -159,6 +162,7 @@ library(tigris)
 library(sf)
 library(ggplot2)
 library(dplyr)
+library(patchwork)
 
 # Get Hawaii county boundaries
 hi_counties_sf <- counties(state = "HI", cb = TRUE, year = 2022) |>
