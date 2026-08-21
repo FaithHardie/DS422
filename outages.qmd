@@ -238,3 +238,29 @@ This seems like a good start to understanding power outages, but is fairly limit
 #### Your Turn
 
 [Follow the steps here](https://worldbank.github.io/blackmarbler/#installation) to generate the first 2 visualizations of nighttime lights in Ghana (map and bar chart). Stop at "Workflow to Update Data". We will tweak this analysis to measure power outages in Honolulu county pre/during/post severe weather events with known outages from the eagle-i dataset
+
+```{r}
+#libraries
+#### Setup
+# Load packages
+library(blackmarbler)
+library(geodata)
+library(sf)
+library(terra)
+library(ggplot2)
+library(tidyterra)
+library(lubridate)
+
+#### Define NASA bearer token
+bearer <- "eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4iLCJzaWciOiJlZGxqd3RwdWJrZXlfb3BzIiwiYWxnIjoiUlMyNTYifQ.eyJ0eXBlIjoiVXNlciIsInVpZCI6ImZoYXJkaWUiLCJleHAiOjE3OTI0NTYwNzksImlhdCI6MTc4NzI3MjA3OSwiaXNzIjoiaHR0cHM6Ly91cnMuZWFydGhkYXRhLm5hc2EuZ292IiwiaWRlbnRpdHlfcHJvdmlkZXIiOiJlZGxfb3BzIiwiYWNyIjoiZWRsIiwiYXNzdXJhbmNlX2xldmVsIjozfQ.3Lrj1YrkkqpbpmOhfkSlzLe7XHfQ3wULnJmFXRF5YyMgBBM2RYFUkZbrlmvHYqa-w0BbSRXs4lKvNh2wOBd_2YRwBXDcKmcNrqx8PivdFrDvCHIe5OBrnE3E_WvbAq3ogFBvZIPI61hg0R5NRhiCvyBrkGPWM89G5Ll9kRTZ9TdAbgf3Htudl_xbo4-wziTq4H0_MbLKThPEVf1Tl9ws5CFzia7CAGdMqpufXpAkbCEGG_UWA8ODTBTvPVSyxwW6G-42tuUkY1d8JcHBjtQvfDKiFo9miAdIB_GEIYduNujHHBokmsW9onfsHMr2RQCJU4y7C3ZnlEBRwDEZQIoJTg"
+
+### ROI
+# Define region of interest (roi). The roi must be (1) an sf polygon and (2)
+# in the WGS84 (epsg:4326) coordinate reference system. Here, we use the
+# getData function to load a polygon of Ghana
+roi_sf <- gadm(country = "GHA", level=1, path = tempdir()) 
+```
+
+```{r}
+
+```
