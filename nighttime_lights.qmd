@@ -37,31 +37,80 @@ editor: visual
 
   - [Rainfall and wind summaries from March 10-16, 2026 severe weather](https://www.weather.gov/hfo/marchSevere2026) 
 
-<!-- -->
-
 - Render night light map of Oahu 
 
-  ```{r}
-  #libraries
-  #### Setup
-  # Load packages
-  library(blackmarbler)
-  library(geodata)
-  library(sf)
-  library(terra)
-  library(ggplot2)
-  library(tidyterra)
-  library(lubridate)
+```{r}
+#### Setup
+# Load packages
+library(blackmarbler)
+library(geodata)
+library(sf)
+library(terra)
+library(ggplot2)
+library(tidyterra)
+library(lubridate)
 
-  #### Define NASA bearer token
-  bearer <- "eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4iLCJzaWciOiJlZGxqd3RwdWJrZXlfb3BzIiwiYWxnIjoiUlMyNTYifQ.eyJ0eXBlIjoiVXNlciIsInVpZCI6ImZoYXJkaWUiLCJleHAiOjE3OTI0NTYwNzksImlhdCI6MTc4NzI3MjA3OSwiaXNzIjoiaHR0cHM6Ly91cnMuZWFydGhkYXRhLm5hc2EuZ292IiwiaWRlbnRpdHlfcHJvdmlkZXIiOiJlZGxfb3BzIiwiYWNyIjoiZWRsIiwiYXNzdXJhbmNlX2xldmVsIjozfQ.3Lrj1YrkkqpbpmOhfkSlzLe7XHfQ3wULnJmFXRF5YyMgBBM2RYFUkZbrlmvHYqa-w0BbSRXs4lKvNh2wOBd_2YRwBXDcKmcNrqx8PivdFrDvCHIe5OBrnE3E_WvbAq3ogFBvZIPI61hg0R5NRhiCvyBrkGPWM89G5Ll9kRTZ9TdAbgf3Htudl_xbo4-wziTq4H0_MbLKThPEVf1Tl9ws5CFzia7CAGdMqpufXpAkbCEGG_UWA8ODTBTvPVSyxwW6G-42tuUkY1d8JcHBjtQvfDKiFo9miAdIB_GEIYduNujHHBokmsW9onfsHMr2RQCJU4y7C3ZnlEBRwDEZQIoJTg"
+#### Define NASA bearer token
+bearer <- "eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4iLCJzaWciOiJlZGxqd3RwdWJrZXlfb3BzIiwiYWxnIjoiUlMyNTYifQ.eyJ0eXBlIjoiVXNlciIsInVpZCI6ImZoYXJkaWUiLCJleHAiOjE3OTI0NTYwNzksImlhdCI6MTc4NzI3MjA3OSwiaXNzIjoiaHR0cHM6Ly91cnMuZWFydGhkYXRhLm5hc2EuZ292IiwiaWRlbnRpdHlfcHJvdmlkZXIiOiJlZGxfb3BzIiwiYWNyIjoiZWRsIiwiYXNzdXJhbmNlX2xldmVsIjozfQ.3Lrj1YrkkqpbpmOhfkSlzLe7XHfQ3wULnJmFXRF5YyMgBBM2RYFUkZbrlmvHYqa-w0BbSRXs4lKvNh2wOBd_2YRwBXDcKmcNrqx8PivdFrDvCHIe5OBrnE3E_WvbAq3ogFBvZIPI61hg0R5NRhiCvyBrkGPWM89G5Ll9kRTZ9TdAbgf3Htudl_xbo4-wziTq4H0_MbLKThPEVf1Tl9ws5CFzia7CAGdMqpufXpAkbCEGG_UWA8ODTBTvPVSyxwW6G-42tuUkY1d8JcHBjtQvfDKiFo9miAdIB_GEIYduNujHHBokmsW9onfsHMr2RQCJU4y7C3ZnlEBRwDEZQIoJTg"
 
 
-  ### ROI
-  # Define region of interest (roi). The roi must be (1) an sf polygon and (2)
-  # in the WGS84 (epsg:4326) coordinate reference system. Here, we use the
-  # getData function to load a polygon of Ghana
-  roi_sf <- gadm(country = "USA", level = 2, path = tempdir()) |>
-    sf::st_as_sf() |>
-    filter(NAME_1 == "Hawaii", NAME_2 == "Honolulu")
-  ```
+### ROI
+# Define region of interest (roi). The roi must be (1) an sf polygon and (2)
+# in the WGS84 (epsg:4326) coordinate reference system. Here, we use the
+# getData function to load a polygon of Ghana
+roi_sf <- gadm(country = "USA", level = 2, path = tempdir()) |>
+  sf::st_as_sf() |>
+  filter(NAME_1 == "Hawaii", NAME_2 == "Honolulu")
+```
+
+```{r}
+### Daily data: raster for February 5, 2021
+r_20210205 <- bm_raster(roi_sf = roi_sf,
+                        product_id = "VNP46A2",
+                        date = "2026-03-14",
+                        bearer = bearer)
+
+### Monthly data: raster for October 2021
+r_202110 <- bm_raster(roi_sf = roi_sf,
+                      product_id = "VNP46A3",
+                      date = "2026-03-01", # The day is ignored
+                      bearer = bearer)
+
+```
+
+```{r}
+#### Daily data in March 2021
+r_daily <- bm_raster(roi_sf = roi_sf,
+                     product_id = "VNP46A2",
+                     date = seq.Date(from = ymd("2026-03-10"), to = ymd("2026-03-14"), by = "day"),
+                     bearer = bearer)
+
+```
+
+```{r}
+#### Make raster
+r <- bm_raster(roi_sf = roi_sf,
+               product_id = "VNP46A3",
+               date = "2026-3-14",
+               bearer = bearer)
+
+#### Prep data
+r <- r |> terra::mask(roi_sf)
+
+## Distribution is skewed, so log
+r[] <- log(r[] + 1)
+
+##### Map
+ggplot() +
+  geom_spatraster(data = r) +
+  scale_fill_gradient2(low = "black",
+                       mid = "yellow",
+                       high = "red",
+                       midpoint = 4.5,
+                       na.value = "transparent") +
+  labs(title = "Nighttime Lights: October 2026") +
+  coord_sf() +
+  theme_void() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        legend.position = "none")
+```
