@@ -351,3 +351,7 @@ ntl_df |>
   theme_minimal() +
   theme(strip.text = element_text(face = "bold"))
 ```
+
+```{r}
+ 
+```

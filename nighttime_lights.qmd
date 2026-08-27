@@ -1,0 +1,67 @@
+---
+title: "nighttime_lights"
+author: "Faith &Ashley"
+format: html
+editor: visual
+---
+
+## **DS-422 Geocomputation: Kona Low Storms**
+
+**Research question:** How did the first Kona Low storm in March of 2026 impact power outages on the East side of Oahu compared to the West and North?
+
+**Sub questions:**
+
+1.  Does the eagle_i_hawaii data accurately reflect the power outages observed by the NASA LAADS DAC? 
+
+2.  Does the storm coverage across the different sides of the island directly coincide with the power outages? 
+
+3.  What do these power outages reflect about Oahu's infrastructure specific to different regions of Oahu? 
+
+- Kona Low storms impacted Hawaiʻi from March 10 to March 24, 2026 
+
+  - <https://hfbf.org/disaster-kona-lows-march-2026/> 
+
+  - **First Storm:** March 10 - March 16, 2026
+
+- Cross examine with eagle_i_hawaii data 
+
+**To Do:**
+
+- Find articles discussing power outages from first Kona Low storm
+
+  - [Kona storm impacts: What does weather look like for the week ahead?](https://www.khon2.com/weather-blog/kona-storm-impacts-week-ahead-weather/)  
+
+  - [Crews restore major transmission lines; 86,000 without power statewide \| Honolulu Star-Advertiser](https://www.staradvertiser.com/2026/03/13/breaking-news/strengthening-winds-cause-scattered-power-outages-across-hawaii/) 
+
+  - [March 2026 Kona Low: Historic Flooding Hits Every Hawaiian Island](https://www.disasteraware.com/news-event/march-2026-kona-low-historic-flooding-hawaii) 
+
+  - [Rainfall and wind summaries from March 10-16, 2026 severe weather](https://www.weather.gov/hfo/marchSevere2026) 
+
+<!-- -->
+
+- Render night light map of Oahu 
+
+  ```{r}
+  #libraries
+  #### Setup
+  # Load packages
+  library(blackmarbler)
+  library(geodata)
+  library(sf)
+  library(terra)
+  library(ggplot2)
+  library(tidyterra)
+  library(lubridate)
+
+  #### Define NASA bearer token
+  bearer <- "eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4iLCJzaWciOiJlZGxqd3RwdWJrZXlfb3BzIiwiYWxnIjoiUlMyNTYifQ.eyJ0eXBlIjoiVXNlciIsInVpZCI6ImZoYXJkaWUiLCJleHAiOjE3OTI0NTYwNzksImlhdCI6MTc4NzI3MjA3OSwiaXNzIjoiaHR0cHM6Ly91cnMuZWFydGhkYXRhLm5hc2EuZ292IiwiaWRlbnRpdHlfcHJvdmlkZXIiOiJlZGxfb3BzIiwiYWNyIjoiZWRsIiwiYXNzdXJhbmNlX2xldmVsIjozfQ.3Lrj1YrkkqpbpmOhfkSlzLe7XHfQ3wULnJmFXRF5YyMgBBM2RYFUkZbrlmvHYqa-w0BbSRXs4lKvNh2wOBd_2YRwBXDcKmcNrqx8PivdFrDvCHIe5OBrnE3E_WvbAq3ogFBvZIPI61hg0R5NRhiCvyBrkGPWM89G5Ll9kRTZ9TdAbgf3Htudl_xbo4-wziTq4H0_MbLKThPEVf1Tl9ws5CFzia7CAGdMqpufXpAkbCEGG_UWA8ODTBTvPVSyxwW6G-42tuUkY1d8JcHBjtQvfDKiFo9miAdIB_GEIYduNujHHBokmsW9onfsHMr2RQCJU4y7C3ZnlEBRwDEZQIoJTg"
+
+
+  ### ROI
+  # Define region of interest (roi). The roi must be (1) an sf polygon and (2)
+  # in the WGS84 (epsg:4326) coordinate reference system. Here, we use the
+  # getData function to load a polygon of Ghana
+  roi_sf <- gadm(country = "USA", level = 2, path = tempdir()) |>
+    sf::st_as_sf() |>
+    filter(NAME_1 == "Hawaii", NAME_2 == "Honolulu")
+  ```
