@@ -36,8 +36,8 @@ NASA Earthdata credentials are needed to pull Black Marble data. Store these as 
 
 ```{r bearer-token}
 
-bearer <- get_nasa_token(username = "connorflynn", 
-                         password = "EarthData120")
+bearer <- 
+
 ```
 
 ## Finding the right night to look at
@@ -124,7 +124,7 @@ The baseline is the 10 days immediately preceding the storm. This window happens
 
 ```{r set-dates}
 storm_dates <- storm_date_label
-baseline_dates <- seq.Date(from = as.Date("2025-01-15"), to = as.Date("2025-01-24"), by = "day")
+baseline_dates <- seq.Date(from = as.Date("2026-03-12"), to = as.Date("2025-03-17"), by = "day")
 all_dates <- c(baseline_dates, storm_dates)
 ```
 

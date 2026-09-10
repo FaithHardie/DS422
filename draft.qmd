@@ -1,0 +1,357 @@
+---
+title: "nighttime_lights"
+author: "Faith &Ashley"
+format: html
+editor: visual
+---
+
+## **DS-422 Geocomputation: Kona Low Storms**
+
+**Research question:** How did the first Kona Low storm and second Kona Low storm differ in their impact on power outages on Oahu?
+
+***Sub questions:***
+
+1.  *Regionally, how did the impacts differ?*
+
+2.  *Did the outage patterns correlate with the storm's paths?*
+
+### setup
+
+```{r}
+#| message: false
+#| warning: false
+
+library(blackmarbler)
+library(geodata)
+library(sf)
+library(terra)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(tidyterra)
+library(lubridate)
+library(tigris)
+
+options(tigris_use_cache = TRUE)
+
+bearer <- Sys.getenv("NASA_BEARER")
+```
+
+### Dates
+
+Baseline dates: March 1 to march 7
+
+Storm1: March 10 to March 16
+
+Gap: March 18th
+
+storm 2: March 19-24
+
+```{r}
+all_dates <- list(
+  baseline = seq.Date(from = ymd("2026-03-01"), to = ymd("2026-03-07"), by = "day"),
+  gap      = ymd("2026-03-18"),
+  storm1   = seq.Date(from = ymd("2026-03-10"), to = ymd("2026-03-16"), by = "day"),
+  storm2   = seq.Date(from = ymd("2026-03-19"), to = ymd("2026-03-24"), by = "day")
+)
+```
+
+Hawaii boundary
+
+```{r}
+roi_hawaii <- counties(state = "HI", cb = TRUE, year = 2022) |>
+  st_transform(4326) |>
+  st_crop(xmin = -160.5, xmax = -154.5, ymin = 18.5, ymax = 22.5) |>
+  filter(NAMELSAD != "Kalawao County") |>
+  mutate(county = gsub(" County", "", NAME))
+```
+
+```{r}
+#| message: false
+#| warning: false
+r_list <- list()
+for (period in names(all_dates)) {
+  r_list[[period]] <- bm_raster(roi_sf = roi_sf,
+                                product_id = "VNP46A2",  
+                                quality_flag_rm = 2,
+                                date = all_dates[[period]],
+                                bearer = bearer)
+}
+```
+
+```{r}
+r_masked <- list()
+for (period in names(r_list)) {
+  r <- r_list[[period]] |> terra::mask(vect(roi_sf))
+  r[] <- log(r[] + 1)
+  r_masked[[period]] <- r
+}
+```
+
+```{r}
+period_mean <- list()
+for (period in names(r_masked)) {
+  period_mean[[period]] <- terra::mean(r_masked[[period]], na.rm = TRUE)
+}
+
+```
+
+```{r}
+### Mean raster per period + change rasters
+
+period_mean <- list()
+for (period in names(r_masked)) {
+  period_mean[[period]] <- terra::mean(r_masked[[period]], na.rm = TRUE)
+}
+
+absolute_storm1 <- period_mean$storm1 - period_mean$baseline
+absolute_storm2 <- period_mean$storm2 - period_mean$baseline
+absolute_storm2_gap <- period_mean$storm2 - period_mean$gap
+
+percent_storm1 <- ((period_mean$storm1 - period_mean$baseline) / period_mean$baseline) * 100
+percent_storm2 <- ((period_mean$storm2 - period_mean$baseline) / period_mean$baseline) * 100
+percent_storm2_gap <- ((period_mean$storm2 - period_mean$gap) / period_mean$gap) * 100
+
+baseline_sd <- terra::app(r_masked$baseline, sd, na.rm = TRUE)
+z_score_storm1 <- (period_mean$storm1 - period_mean$baseline) / baseline_sd
+z_score_storm2 <- (period_mean$storm2 - period_mean$baseline) / baseline_sd
+```
+
+```{r}
+
+### Map: baseline period, before Kona low
+ggplot() +
+  
+  geom_spatraster(data = r_masked$baseline) +
+  facet_wrap(~lyr, ncol = 4) +
+  scale_fill_gradient2(low = "black",
+                       mid = "yellow",
+                       high = "red",
+                       midpoint = 4.5,
+                       na.value = "transparent") +
+  
+  labs(title = "Oahu Nighttime Lights: Feb 24 - Mar 1, 2026",
+       subtitle = "Before First Kona Low Storm of 2026") +
+  coord_sf() +
+  theme_void() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        strip.text = element_text(face = "bold"),
+        legend.position = "none")
+```
+
+```{r}
+#| echo: false
+
+### Map: one panel per day, March 10-16, 2026
+ggplot() +
+  
+  geom_spatraster(data = r_masked$storm1) +
+  facet_wrap(~lyr, ncol = 2) +
+  scale_fill_gradient2(low = "black",
+                       mid = "yellow",
+                       high = "red",
+                       midpoint = 4.5,
+                       na.value = "transparent") +
+  
+  labs(title = "Oahu Nighttime Lights: March 10-16, 2026",
+       subtitle = "First Kona Low Storm of 2026 \n(Missing Mar 10-12)") +
+  coord_sf() +
+  theme_void() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        strip.text = element_text(face = "bold"),
+        legend.position = "none")
+```
+
+```{r}
+ggplot() +
+  
+  geom_spatraster(data = r_masked$storm2) +
+  facet_wrap(~lyr, ncol = 3) +
+  scale_fill_gradient2(low = "black",
+                       mid = "yellow",
+                       high = "red",
+                       midpoint = 4.5,
+                       na.value = "transparent") +
+  
+  labs(title = "Oahu Nighttime Lights: March 19-24, 2026",
+       subtitle = "Second Kona Low Storm of 2026") +
+  coord_sf() +
+  theme_void() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        strip.text = element_text(face = "bold"),
+        legend.position = "none")
+```
+
+```{r}
+baseline_luminance <- terra::global(r_masked$baseline, "mean", na.rm = TRUE)[,1]
+storm1_luminance <- terra::global(r_masked$storm1, "mean", na.rm = TRUE)[,1]
+storm2_luminance <- terra::global(r_masked$storm2, "mean", na.rm = TRUE)[,1]
+
+daily_dates <- c(all_dates$baseline, ymd(c("2026-03-13", "2026-03-14", "2026-03-15", "2026-03-16", "2026-03-19", "2026-03-20", "2026-03-21", "2026-03-22", "2026-03-23", "2026-03-24")))
+daily_luminance <- c(baseline_luminance, storm1_luminance, storm2_luminance)
+
+df_storm1 <- data.frame(
+  Date = daily_dates,
+  Luminance = daily_luminance,
+  Period = c(rep("Baseline", length(all_dates$baseline)), rep("First Kona Low", 4), rep("Second Kona Low", 6))
+)
+
+ggplot(df_storm1, aes(x = Date, y = Luminance, fill = Period)) +
+  geom_col() +
+  scale_fill_manual(values = c("Baseline" = "gray70", "First Kona Low" = "steelblue", "Second Kona Low" = "maroon")) +
+  labs(
+    title = "Daily Overall Luminance: First Kona Low",
+    x = "Date",
+    y = "Mean Luminance",
+    fill = "Period"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot() +
+  geom_spatraster(data = absolute_storm1) +
+  geom_spatvector(data = roi_sf, fill = NA, color = "black", linewidth = 0.2) +
+  scale_fill_gradient2(
+    low = "blue",
+    mid = "white",
+    high = "red",
+    midpoint = 0,
+    na.value = "transparent"
+  ) +
+  labs(
+    title = "Absolute Change in Nighttime Lights",
+    subtitle = "First Kona Low Storm vs. Baseline Period",
+    fill = "NTL Change"
+  ) +
+  coord_sf() +
+  theme_void() +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+```
+
+```{r}
+ggplot() +
+  geom_spatraster(data = absolute_storm2) +
+  geom_spatvector(data = roi_sf, fill = NA, color = "black", linewidth = 0.2) +
+  scale_fill_gradient2(
+    low = "blue",
+    mid = "white",
+    high = "red",
+    midpoint = 0,
+    na.value = "transparent"
+  ) +
+  labs(
+    title = "Absolute Change in Nighttime Lights",
+    subtitle = "Second Kona Low Storm vs. Baseline Period",
+    fill = "NTL Change"
+  ) +
+  coord_sf() +
+  theme_void() +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+```
+
+```{r}
+ggplot() +
+  geom_spatraster(data = absolute_storm2_gap) +
+  geom_spatvector(data = roi_sf, fill = NA, color = "black", linewidth = 0.2) +
+  scale_fill_gradient2(
+    low = "blue",
+    mid = "white",
+    high = "red",
+    midpoint = 0,
+    na.value = "transparent"
+  ) +
+  labs(
+    title = "Absolute Change in Nighttime Lights",
+    subtitle = "Second Kona Low Storm vs. Gap Day",
+    fill = "NTL Change"
+  ) +
+  coord_sf() +
+  theme_void() +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+```
+
+```{r}
+ggplot() +
+  geom_spatraster(data = percent_storm1) +
+  geom_spatvector(data = roi_sf, fill = NA, color = "black", linewidth = 0.2) +
+  scale_fill_gradient2(
+    low = "blue",
+    mid = "white",
+    high = "red",
+    midpoint = 0,
+    na.value = "transparent"
+  ) +
+  labs(
+    title = "Percent Change in Nighttime Lights",
+    subtitle = "First Kona Low Storm vs. Baseline Period",
+    fill = "Percent Change"
+  ) +
+  coord_sf() +
+  theme_void() +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+```
+
+```{r}
+ggplot() +
+  geom_spatraster(data = percent_storm2) +
+  geom_spatvector(data = roi_sf, fill = NA, color = "black", linewidth = 0.2) +
+  scale_fill_gradient2(
+    low = "blue",
+    mid = "white",
+    high = "red",
+    midpoint = 0,
+    na.value = "transparent"
+  ) +
+  labs(
+    title = "Percent Change in Nighttime Lights",
+    subtitle = "Second Kona Low Storm vs. Baseline Period",
+    fill = "Percent Change"
+  ) +
+  coord_sf() +
+  theme_void() +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+
+```
+
+```{r}
+ggplot() +
+  geom_spatraster(data = percent_storm2_gap) +
+  geom_spatvector(data = roi_sf, fill = NA, color = "black", linewidth = 0.2) +
+  scale_fill_gradient2(
+    low = "blue",
+    mid = "white",
+    high = "red",
+    midpoint = 0,
+    na.value = "transparent"
+  ) +
+  labs(
+    title = "Percent Change in Nighttime Lights",
+    subtitle = "Second Kona Low Storm vs. Gap Day",
+    fill = "Percent Change"
+  ) +
+  coord_sf() +
+  theme_void() +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+```

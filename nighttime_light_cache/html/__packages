@@ -1,0 +1,17 @@
+base
+methods
+datasets
+utils
+grDevices
+graphics
+stats
+blackmarbler
+sf
+terra
+ggplot2
+dplyr
+tidyr
+tidyterra
+lubridate
+tigris
+exactextractr

@@ -1,0 +1,164 @@
+---
+title: "lights_presentation"
+format: html
+editor: visual
+---
+
+## **DS-422 Geocomputation: Kona Low Storms**
+
+**Research question:** How did the first Kona Low storm and second Kona Low storm differ in their impact on power outages on Oahu?
+
+**Sub questions:**
+
+1.  Regionally, how did the impacts differ? 
+
+2.  Did the outage patterns correlate with the storm's paths?
+
+### **Part 1:**
+
+**Baseline power outages: What did nighttime light luminance look like before the kona low storms:** 
+
+- Week before first storm, period of 7 days: 1-7th of march.
+
+```{r}
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(tigris)
+library(sf)
+library(blackmarbler)
+library(purrr)
+library(terra)
+library(tidyterra)
+library(lubridate)
+library(here)
+library(exactextractr)
+library(tmap)
+library(gt)
+
+options(tigris_use_cache = TRUE)
+
+bearer <- Sys.getenv("NASA_BEARER")
+```
+
+Cropping the ROI to Oahu only, since the map would be mostly ocean
+
+```{r}
+oahu <- counties(state = "HI", cb = TRUE, year = 2022) |>
+  st_transform(4326) |>
+  filter(NAME == "Honolulu") |>
+  st_crop(xmin = -158.35, xmax = -157.60, ymin = 21.20, ymax = 21.75)
+
+plot(st_geometry(oahu), main = "Oahu ROI")
+```
+
+Baseline dates:
+
+These are the dates I want to use as a baseline comparison to my kona low storms. Because night time light luminescence can fluctuate without the influence of storms or power outages, it is necessary to have a independent variable of luminence to compare our outages too.
+
+VNP46A2= Daily product
+
+tryCatch()= wrapper to prevent batch from failing (since some dates are missing based on previous findings.)
+
+```{r}
+pull_night <- function(d) {
+  tryCatch({
+    bm_raster(roi_sf = oahu,
+              product_id = "VNP46A2",
+              date = d,
+              bearer = bearer,
+              quality_flag_rm = 2)
+  }, error = function(e) {
+    message("No imagery for ", d)
+    NULL
+  })
+}
+
+pull_period <- function(dates) {
+  lst <- map(dates, pull_night)
+  names(lst) <- as.character(dates)
+  lst <- compact(lst)
+  if (length(lst) == 0) return(NULL)
+  r <- rast(lst)
+  names(r) <- names(lst)          # claude said blackmarbler renames layers, so force it back
+  terra::mask(r, oahu)
+}
+```
+
+```{r}
+baseline_dates <- seq.Date(as.Date("2026-03-01"), as.Date("2026-03-07"), by = "day")
+r_baseline <- pull_period(baseline_dates)
+
+message("Baseline nights retrieved: ", nlyr(r_baseline), " of 7")
+message("Dates: ", paste(names(r_baseline), collapse = ", "))
+
+baseline_mean <- mean(r_baseline, na.rm = TRUE)
+baseline_sd   <- app(r_baseline, sd, na.rm = TRUE)
+```
+
+```{r}
+storm1_dates <- seq.Date(as.Date("2026-03-10"), as.Date("2026-03-16"), by = "day")
+storm2_dates <- seq.Date(as.Date("2026-03-19"), as.Date("2026-03-24"), by = "day")
+gap_date     <- as.Date("2026-03-18")
+
+r_storm1 <- pull_period(storm1_dates)
+r_storm2 <- pull_period(storm2_dates)
+r_gap    <- pull_period(gap_date)
+
+storm1_mean <- mean(r_storm1, na.rm = TRUE)
+storm2_mean <- mean(r_storm2, na.rm = TRUE)
+gap_mean    <- mean(r_gap, na.rm = TRUE)
+
+tibble(
+  period = c("Baseline", "Storm 1", "Gap (Mar 18)", "Storm 2"),
+  requested = c(7, 7, 1, 6),
+  retrieved = c(nlyr(r_baseline), nlyr(r_storm1), nlyr(r_gap), nlyr(r_storm2))
+) |> gt() |> tab_header(title = "Imagery Retrieved by Period")
+```
+
+```{r}
+#| fig-width: 11
+#| fig-height: 9
+
+log_it <- function(r) { r[] <- log(r[] + 1); r }
+
+panel <- c(log_it(baseline_mean), log_it(storm1_mean),
+           log_it(gap_mean),      log_it(storm2_mean))
+
+names(panel) <- c("Baseline (Mar 1-7)", "Storm 1 (Mar 10-16)",
+                  "Gap (Mar 18)",       "Storm 2 (Mar 19-24)")
+
+shared_limits <- range(values(panel), na.rm = TRUE)
+
+ggplot() +
+  geom_spatraster(data = panel) +
+  facet_wrap(~lyr, ncol = 2) +
+  scale_fill_gradient2(low = "black", mid = "yellow", high = "red",
+                       midpoint = mean(shared_limits),
+                       limits = shared_limits,
+                       na.value = "transparent",
+                       name = "log(radiance + 1)") +
+  labs(title = "Oahu Nighttime Lights Across the March 2026 Kona Lows",
+       subtitle = "All four panels share one color scale, so brightness is directly comparable") +
+  coord_sf() +
+  theme_void() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        strip.text = element_text(face = "bold"))
+```
+
+### Part 2
+
+Storm 1 power outages: What did nighttime light luminance look like from March 10-16th (note, missing satellite imagery for a few of these days. Will include this shortcoming in conclusion.)
+
+### Part 3:
+
+Storm 2 power outages: What did nighttime light luminance look like from March 19-24th? 
+
+### Part 4:
+
+Gap coverage: What did nighttime light luminance look like on March 18th? (for a better gauge on the luminance change between storms.)
+
+### Part 5:
+
+Using the Hawaii Climate Data Portal to compare rainfall coverage to power outages on Oahu
