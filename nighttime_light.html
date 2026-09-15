@@ -152,7 +152,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="hawaii-boundary" class="level3">
 <h3 class="anchored" data-anchor-id="hawaii-boundary">Hawaii boundary</h3>
-<p><code>tigris</code> defaults to NAD83 and Black Marble expects WGS84, so the reprojection is required. Honolulu County’s official boundary extends across the Northwestern Hawaiian Islands, so it is cropped to Oahu itself.</p>
+<p>Honolulu County’s official boundary extends across the Northwestern Hawaiian Islands, hundreds of miles of open ocean, so it is cropped to Oahu itself. Without that crop every map would be mostly empty water and every islandwide average would be dragged toward zero.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>roi_hawaii <span class="ot">&lt;-</span> <span class="fu">counties</span>(<span class="at">state =</span> <span class="st">"HI"</span>, <span class="at">cb =</span> <span class="cn">TRUE</span>, <span class="at">year =</span> <span class="dv">2022</span>) <span class="sc">|&gt;</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">st_transform</span>(<span class="dv">4326</span>) <span class="sc">|&gt;</span></span>
@@ -176,8 +176,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="pulling-black-marble-rasters" class="level3">
 <h3 class="anchored" data-anchor-id="pulling-black-marble-rasters">Pulling Black Marble rasters</h3>
-<p>VNP46A2 is the daily product. Each date is pulled individually and wrapped in <code>tryCatch()</code>, so one missing night does not kill the whole period. This matters because several March storm nights have no usable imagery.</p>
-<p>Black Marble labels its layers <code>t2026_03_10</code>, so the names are forced back to ISO dates. Without that, later date matching silently returns nothing.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>r_list <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
@@ -185,7 +183,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  dates <span class="ot">&lt;-</span> all_dates[[period]]</span>
 <span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>  lst <span class="ot">&lt;-</span> <span class="fu">lapply</span>(dates, <span class="cf">function</span>(d) {</span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">tryCatch</span>(</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">tryCatch</span>(<span class="co">#try catch skips missing values</span></span>
 <span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>      <span class="fu">bm_raster</span>(<span class="at">roi_sf =</span> roi_sf,</span>
 <span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>                <span class="at">product_id =</span> <span class="st">"VNP46A2"</span>,</span>
 <span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>                <span class="at">quality_flag_rm =</span> <span class="dv">2</span>,</span>
@@ -219,11 +217,11 @@ gap           gap         1         1
 storm2     storm2         6         6</code></pre>
 </div>
 </div>
-<p>That table belongs in the conclusion. It turns the missing-imagery caveat into a number.</p>
+<p>The baseline and second storm returned every night requested. The first storm returned four of seven: March 10, 11 and 12 have no usable imagery. Those are the opening nights of the storm, which is when outages would have been most widespread, so the first storm is measured from its recovery phase rather than its peak.</p>
 </section>
 <section id="masking" class="level3">
 <h3 class="anchored" data-anchor-id="masking">Masking</h3>
-<p>Everything from here stays on the raw radiance scale. Log transforms are applied only when a map needs them, and always fresh, never on top of an already-logged raster. Logging before computing change would turn absolute change into a log ratio and make percent change uninterpretable.</p>
+<p>Everything from here stays on the raw radiance scale. Logging before computing change would turn absolute change into a log ratio and make percent change uninterpretable.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>r_masked <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (period <span class="cf">in</span> <span class="fu">names</span>(r_list)) {</span>
@@ -264,11 +262,13 @@ storm2     storm2         6         6</code></pre>
 18 2026-03-24   storm2    8269       100</code></pre>
 </div>
 </div>
-<p>Under a Kona Low the pixels the satellite loses are disproportionately those under the heaviest cloud, which are also the ones most likely to have lost power. Any difference between the two storms has to be read against this table first.</p>
+<p>Every night that was delivered returned all of Oahu pixels. The expected problem with Kona Low is cloud coverage removing pixels unevenly across the island, with the heaviest rain areas dropping out first. That did not happen at the pixel level here. The data loss in this analysis is the missing nights rather than partial coverage within nights, so althought storm 1 has less statistical power, there isnt a spatial bias towards specific affected areas (assuming areas with more cloud coverage could be more heavilt afected.)</p>
 </section>
 <section id="period-composites-and-change-metrics" class="level3">
 <h3 class="anchored" data-anchor-id="period-composites-and-change-metrics">Period composites and change metrics</h3>
-<p>Percent change explodes toward meaningless values where the baseline is near zero, so dim pixels are masked out before dividing. The z-score divides by each pixel’s baseline standard deviation, which breaks down at pixels that barely vary, so those are dropped too.</p>
+<p>Each period is collapsed to a mean across its nights, then two change metrics are computed against the baseline.</p>
+<p>Percent change asks what share of a pixel’s normal light was lost, so that the difference is coverage in a dim neighborhood and for example downtown can be accurately compared. pixels below a brightness floor are masked out before dividing, which for example the kooalau ridges, so that they do not affect the percent change.</p>
+<p>The z-score asks how unusual a storm value is given how much that pixel normally fluctuates from night to night. It has the mirror-image failure: dividing by a near-zero standard deviation produces an enormous z-score, so a floor is applied to the standard deviation as well.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>period_mean <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (period <span class="cf">in</span> <span class="fu">names</span>(r_masked)) {</span>
@@ -318,9 +318,12 @@ min -109.37761
 max   23.96773</code></pre>
 </div>
 </div>
+<p>Percent change for Storm 1 spans roughly -55% to +58%, meaning the first storm’s darkest pixels lost about half their light while a comparable number gained. Storm 2 spans -87% to +214%, a substantially wider and more negative range.</p>
+<p>The z-scores reach -54 for Storm 1 and -109 for Storm 2, which are far larger than any real anomaly. These come from pixels where the baseline standard deviation is very small but not small enough to be caught by the floor, which sits at about 0.03. A pixel that barely moved across seven baseline nights will produce an extreme z-score from a modest real change. This is why the maps below clip their color scale at the 1st and 99th percentiles, and why the regional means rather than the extremes matter.</p>
 </section>
 <section id="setting-the-noise-floor-from-the-data" class="level3">
 <h3 class="anchored" data-anchor-id="setting-the-noise-floor-from-the-data">Setting the noise floor from the data</h3>
+<p>this table checks where a change stops being distinguishable from noise. If a brightness bin darkens at close to fifty percent, its pixels are effectively flipping a coin and carry no signal.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>paired <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">baseline =</span> <span class="fu">values</span>(period_mean<span class="sc">$</span>baseline)[, <span class="dv">1</span>],</span>
@@ -349,6 +352,8 @@ max   23.96773</code></pre>
 6 75+     106        52.8        73.6</code></pre>
 </div>
 </div>
+<p>In the very dim bins, only about a fifth of pixels got darker during either storm, meaning four out of five got brighter. Unlit terrain does not gain light during a storm, so this is an artifact rather than a real signal.</p>
+<p>Above the threshold the two storms separate clearly. Storm 1 darkens 40 to 53% of pixels, which is a coin flip and therefore not a detectable effect. Storm 2 darkens 62 to 75%. That contrast shows up before any composite or z-score is computed.</p>
 </section>
 <section id="daily-maps" class="level3">
 <h3 class="anchored" data-anchor-id="daily-maps">Daily maps</h3>
@@ -382,6 +387,7 @@ max   23.96773</code></pre>
 </div>
 </div>
 </div>
+<p>The baseline nights are consistent with each other, with the urban corridor from Kapolei through Honolulu clearly lit and the Koolau interior dark. That consistency is what makes a seven-night baseline usable as a reference.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="do">### Map: one panel per day, first storm</span></span>
 <span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>() <span class="sc">+</span></span>
@@ -408,6 +414,7 @@ max   23.96773</code></pre>
 </div>
 </div>
 </div>
+<p>Only four nights appear because March 10 through 12 returned no imagery. Visually these nights are difficult to distinguish from the baseline.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="do">### Map: gap night between the storms</span></span>
 <span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>() <span class="sc">+</span></span>
@@ -432,6 +439,7 @@ max   23.96773</code></pre>
 </div>
 </div>
 </div>
+<p>March 18 looks visibly dimmer than either the baseline or the storm nights around it.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="do">### Map: one panel per day, second storm</span></span>
 <span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>() <span class="sc">+</span></span>
@@ -461,7 +469,7 @@ max   23.96773</code></pre>
 </section>
 <section id="daily-luminance" class="level3">
 <h3 class="anchored" data-anchor-id="daily-luminance">Daily luminance</h3>
-<p>Dates are derived from the layer names rather than typed by hand, so this cannot fall out of sync with whatever the pull actually returned.</p>
+<p>Mean radiance is computed per night and plotted against the baseline level.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>daily <span class="ot">&lt;-</span> <span class="fu">do.call</span>(rbind, <span class="fu">lapply</span>(<span class="fu">names</span>(r_masked), <span class="cf">function</span>(p) {</span>
 <span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">data.frame</span>(</span>
@@ -496,10 +504,11 @@ max   23.96773</code></pre>
 </div>
 </div>
 </div>
+<p>Two things stand out. The Storm 1 bars sit at essentially the baseline level, reinforcing that no islandwide darkening is detectable during the nights available. And the March 18 gap bar is the lowest in the entire series, roughly 5 against a baseline near 7.</p>
+<p>That gap value should be the recovery night. However, because its just based on a single night rather than multiple nights, it carries more noise than the other bar and might not be a good statistical comparison.</p>
 </section>
 <section id="percent-change-maps" class="level3">
 <h3 class="anchored" data-anchor-id="percent-change-maps">Percent change maps</h3>
-<p><code>geom_sf()</code> is used for the boundary outline rather than <code>geom_spatvector()</code>, since <code>roi_sf</code> is an sf object and not a SpatVector.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>map_change <span class="ot">&lt;-</span> <span class="cf">function</span>(r, ttl, sub, lgd) {</span>
 <span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>  v <span class="ot">&lt;-</span> <span class="fu">values</span>(r)</span>
@@ -528,6 +537,7 @@ max   23.96773</code></pre>
 </div>
 </div>
 </div>
+<p>Storm 1 shows red and blue scattered in roughly equal measure with no coherent spatial structure. (null)</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="fu">map_change</span>(percent_storm2, <span class="st">"Percent Change in Nighttime Lights"</span>,</span>
 <span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>           <span class="st">"Second Kona Low storm vs. baseline"</span>, <span class="st">"Percent change"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -539,6 +549,7 @@ max   23.96773</code></pre>
 </div>
 </div>
 </div>
+<p>storm 2 shows a clear blue concentration through Central Oahu, the Windward coast around Kaneohe and Kailua, and the southeast around Hawaii Kai.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="fu">map_change</span>(percent_storm2_gap, <span class="st">"Percent Change in Nighttime Lights"</span>,</span>
 <span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>           <span class="st">"Second Kona Low storm vs. gap day"</span>, <span class="st">"Percent change"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -550,10 +561,11 @@ max   23.96773</code></pre>
 </div>
 </div>
 </div>
+<p>This panel compares Storm 2 to the March 18 gap night rather than to the baseline, so its heavy red simply reflects that the gap night was anomalously dark. It is not a accurate reflection of storm coverage.</p>
 </section>
 <section id="z-score-maps" class="level3">
 <h3 class="anchored" data-anchor-id="z-score-maps">Z-score maps</h3>
-<p>The z-score asks how unusual a storm value is given how much that pixel normally fluctuates, which surfaces darkening in quiet, stable areas that percent change can bury.</p>
+<p>The z score scales each pixels change by its own baseline variability, so a small change in a normally stable place registers more significantly than if that small change occurered in a area that varies more night to night.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="fu">map_change</span>(z_score_storm1, <span class="st">"Radiance Z-Score"</span>,</span>
 <span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>           <span class="st">"First Kona Low storm vs. baseline"</span>, <span class="st">"Z-score"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -576,9 +588,11 @@ max   23.96773</code></pre>
 </div>
 </div>
 </div>
+<p>The Storm 2 z score map concentrates its strongest negative values on the Windward side and the North Shore.</p>
 </section>
 <section id="which-storm-hit-each-area-harder" class="level3">
 <h3 class="anchored" data-anchor-id="which-storm-hit-each-area-harder">Which storm hit each area harder</h3>
+<p>I want these visual findings to be confirmed numerically rather than only based on the maps.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>z_diff <span class="ot">&lt;-</span> z_score_storm1 <span class="sc">-</span> z_score_storm2</span>
 <span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>v <span class="ot">&lt;-</span> <span class="fu">values</span>(z_diff)</span>
@@ -605,10 +619,11 @@ max   23.96773</code></pre>
 </div>
 </div>
 </div>
+<p>Subtracting the two z score rasters gives a per pixel ranking of which storm darkened each location more, which is possible since they both share a baseline term. Blue dominance across the map indicates Storm 2 was the more damaging of the two nearly everywhere.</p>
 </section>
 <section id="change-by-community" class="level3">
 <h3 class="anchored" data-anchor-id="change-by-community">Change by community</h3>
-<p>Census designated places let specific neighborhoods be compared directly instead of picking points by hand.</p>
+<p>Census designated places allow specific named neighborhoods to be compared directly rather than reading values off a raster by eye. Communities are grouped into island regions to understand the storms impacts specific to communities.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>oahu_places <span class="ot">&lt;-</span> <span class="fu">places</span>(<span class="at">state =</span> <span class="st">"HI"</span>, <span class="at">cb =</span> <span class="cn">TRUE</span>, <span class="at">year =</span> <span class="dv">2022</span>) <span class="sc">|&gt;</span></span>
 <span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">st_transform</span>(<span class="dv">4326</span>) <span class="sc">|&gt;</span></span>
@@ -765,11 +780,12 @@ max   23.96773</code></pre>
 </div>
 </div>
 </div>
+<p>At the community level, Mililani Town, Ahuimanu, Wheeler Air Force Base, Waimanalo and Kaneohe show the largest darkening under Storm 1, though all of these are small in absolute terms. Kailua, Haleiwa and Waimanalo Beach show the largest percent losses under Storm 2, in the range of 16 to 26 percent.</p>
 </section>
 </section>
 <section id="answering-the-research-question" class="level2">
 <h2 class="anchored" data-anchor-id="answering-the-research-question">Answering the research question</h2>
-<p>These values are computed from the objects above, so the numbers in the text update whenever the document re-renders.</p>
+<p>Everything up to this point has produced maps and tables. Reading a research finding off a map is a judgment call, and two people looking at the same raster can reach different conclusions. This section exists to remove that ambiguity by reducing the analysis to specific numbers that either support the claim or do not.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>zv1 <span class="ot">&lt;-</span> <span class="fu">values</span>(z_score_storm1); zv2 <span class="ot">&lt;-</span> <span class="fu">values</span>(z_score_storm2)</span>
 <span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>zvg <span class="ot">&lt;-</span> <span class="fu">values</span>(z_score_gap)</span>
@@ -810,6 +826,7 @@ max   23.96773</code></pre>
 6 Windward     -0.543    -1.18   0.638</code></pre>
 </div>
 </div>
+<p>This first chunk takes the rasters built earlier and reduces each to a single islandwide number. It averages the z score and percent change values for both storms and for the gap night, filtering out non finite values first, since a handful of pixels with near zero baseline variability produce infinite z scores that would otherwise turn every average into nan. It then compares the two storms and stores the result as worse_storm, and checks whether percent change ranks them the same way as the z score, storing that as agree metric. then it collapses the community table into island regions and identifies which region each storm hit hardest and where the two diverged most.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sapply</span>(<span class="fu">list</span>(<span class="at">z1 =</span> z_score_storm1, <span class="at">z2 =</span> z_score_storm2),</span>
 <span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>       <span class="cf">function</span>(r) <span class="fu">sum</span>(<span class="fu">is.infinite</span>(<span class="fu">values</span>(r))))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -824,12 +841,17 @@ max   23.96773</code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sum</span>(<span class="fu">values</span>(baseline_sd) <span class="sc">==</span> <span class="dv">0</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>[1] 0</code></pre>
-</div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>zero_sd <span class="ot">&lt;-</span> baseline_sd <span class="sc">==</span> <span class="dv">0</span></span>
-<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(zero_sd, <span class="at">main =</span> <span class="st">"Pixels with zero baseline variability"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a>region_summary <span class="sc">|&gt;</span></span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(region, <span class="st">`</span><span class="at">Storm 1</span><span class="st">`</span> <span class="ot">=</span> z_storm1, <span class="st">`</span><span class="at">Storm 2</span><span class="st">`</span> <span class="ot">=</span> z_storm2) <span class="sc">|&gt;</span></span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">c</span>(<span class="st">`</span><span class="at">Storm 1</span><span class="st">`</span>, <span class="st">`</span><span class="at">Storm 2</span><span class="st">`</span>), <span class="at">names_to =</span> <span class="st">"storm"</span>, <span class="at">values_to =</span> <span class="st">"z"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">reorder</span>(region, z), <span class="at">y =</span> z, <span class="at">fill =</span> storm)) <span class="sc">+</span></span>
+<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">position =</span> <span class="st">"dodge"</span>) <span class="sc">+</span></span>
+<span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">color =</span> <span class="st">"grey30"</span>) <span class="sc">+</span></span>
+<span id="cb39-7"><a href="#cb39-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_flip</span>() <span class="sc">+</span></span>
+<span id="cb39-8"><a href="#cb39-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"Storm 1"</span> <span class="ot">=</span> <span class="st">"steelblue"</span>, <span class="st">"Storm 2"</span> <span class="ot">=</span> <span class="st">"maroon"</span>)) <span class="sc">+</span></span>
+<span id="cb39-9"><a href="#cb39-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Which Storm Hit Which Region Harder"</span>,</span>
+<span id="cb39-10"><a href="#cb39-10" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="cn">NULL</span>, <span class="at">y =</span> <span class="st">"Mean z-score"</span>, <span class="at">fill =</span> <span class="cn">NULL</span>) <span class="sc">+</span></span>
+<span id="cb39-11"><a href="#cb39-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -838,34 +860,13 @@ max   23.96773</code></pre>
 </div>
 </div>
 </div>
-<p><strong>Main question.</strong> Across all meaningful Oahu pixels, the second storm produced the larger mean darkening. Storm 1 had a mean z-score of -0.03 against -0.52 for Storm 2, and mean percent changes of 0.9% and -5.3%. The two metrics agree on which storm was worse islandwide.</p>
-<p><strong>Sub-question 1, regional differences.</strong> Storm 1’s largest mean darkening fell on the Windward region, while Storm 2’s fell on North Shore. The region where the two storms diverged most was North Shore.</p>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a>region_summary <span class="sc">|&gt;</span></span>
-<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(region, <span class="st">`</span><span class="at">Storm 1</span><span class="st">`</span> <span class="ot">=</span> z_storm1, <span class="st">`</span><span class="at">Storm 2</span><span class="st">`</span> <span class="ot">=</span> z_storm2) <span class="sc">|&gt;</span></span>
-<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">c</span>(<span class="st">`</span><span class="at">Storm 1</span><span class="st">`</span>, <span class="st">`</span><span class="at">Storm 2</span><span class="st">`</span>), <span class="at">names_to =</span> <span class="st">"storm"</span>, <span class="at">values_to =</span> <span class="st">"z"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">reorder</span>(region, z), <span class="at">y =</span> z, <span class="at">fill =</span> storm)) <span class="sc">+</span></span>
-<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">position =</span> <span class="st">"dodge"</span>) <span class="sc">+</span></span>
-<span id="cb42-6"><a href="#cb42-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">color =</span> <span class="st">"grey30"</span>) <span class="sc">+</span></span>
-<span id="cb42-7"><a href="#cb42-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_flip</span>() <span class="sc">+</span></span>
-<span id="cb42-8"><a href="#cb42-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"Storm 1"</span> <span class="ot">=</span> <span class="st">"steelblue"</span>, <span class="st">"Storm 2"</span> <span class="ot">=</span> <span class="st">"maroon"</span>)) <span class="sc">+</span></span>
-<span id="cb42-9"><a href="#cb42-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Which Storm Hit Which Region Harder"</span>,</span>
-<span id="cb42-10"><a href="#cb42-10" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="cn">NULL</span>, <span class="at">y =</span> <span class="st">"Mean z-score"</span>, <span class="at">fill =</span> <span class="cn">NULL</span>) <span class="sc">+</span></span>
-<span id="cb42-11"><a href="#cb42-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="nighttime_light_files/figure-html/unnamed-chunk-25-1.png" class="img-fluid figure-img" width="672"></p>
-</figure>
-</div>
-</div>
-</div>
-<p><strong>Did the island recover between storms?</strong> March 18 had a mean z-score of -2.28. A value near zero means the grid was substantially restored before the second system arrived, so the two storms can be read as separate events. A strongly negative value means the second storm landed on a grid still down from the first, and part of its measured impact is inherited rather than new.</p>
-<p><strong>Sub-question 2, storm paths.</strong> The storm-versus-storm map above shows which system darkened each part of the island more. Compare it against the rainfall and wind summaries in the NWS Honolulu March 2026 severe weather report to judge whether darkening followed each storm’s track.</p>
+<p>Then I plot that regional summary as a grouped bar chart, so the numbers behind the regional claim are visible rather than only textual.</p>
 </section>
-<section id="limitations" class="level2">
-<h2 class="anchored" data-anchor-id="limitations">Limitations</h2>
-<p>Radiance is a proxy for grid status rather than a measurement of it, so cloud attenuation during a Kona Low is indistinguishable from an outage at the pixel level. The coverage table above shows how much of the island each period actually delivered, and the pixels lost to cloud are disproportionately those under the heaviest rain, which biases against detecting the worst-hit areas. VIIRS also observes only once per night at roughly 1 to 2 AM local time, so an outage that began and resolved between overpasses leaves no trace. Finally, EAGLE-I outage reports are not yet published for 2026, so nothing here is validated against reported customer counts.</p>
+<section id="conclusion" class="level2">
+<h2 class="anchored" data-anchor-id="conclusion">conclusion</h2>
+<p>The two Kona low storms did not effect Oahu equally. The second storm, from march 19 to 24, produced a clearer loss of nighttime light across the island. The first storm, march 10 to 16, produced no detectable darkening..</p>
+<p>The regional pattern is where storm difference becomes the clearest. Storm 2 is concentrated on thr windward side, while ewa and leeward stayed nearest their baseline/ Storm 1 didnt show a comparable structure. Between the 2 storms, north shore diverged the most, followed by windward. Because these are dimly lit and normally stable areas, a larger z score reflected a unsual anomaly for these places, rather than absolute loss of light. despite holding most of the islands population, Honolulu did not see the same loss.</p>
+<p>Limitations: VIIRS passes over once per night at roughly 1 to 2 AM, so an outage that began and was restored between overpasses leaves no trace. The March 18 gap night rests on that single overpass rather than a multi night average and came back unexplainably dark, so it should be treated as inconclusive rather than used as evidence. ALso, EAGLE I outage records are not yet published for 2026, so none of these findings is checked against reported customer counts.</p>
 </section>
 
 </main>

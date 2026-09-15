@@ -1,0 +1,68 @@
+---
+title: "Agriculture Analysis"
+author: "Faith"
+format: html
+editor: visual
+---
+
+## Libraries
+
+```{r}
+library(tidyverse)
+library(sf)
+library(here)
+library(mapview)
+library(RColorBrewer)
+```
+
+## Reading in data
+
+```{r}
+ag_2015 <- st_read(here("data/ag_2015.geojson"))
+ag_2020 <- st_read(here("data/ag_2020.geojson"))
+```
+
+## EDA
+
+```{r}
+mapview(ag_2015, zcol= "cropcatego")
+##use colorbrewer to enhance color scale 
+```
+
+### Distribution of acreage
+
+```{r}
+ggplot(ag_2015, aes(x=acreage)) +
+  geom_histogram() + 
+  theme_bw() +
+  facet_wrap(~island, scales="free_y")
+```
+
+## Questions: 
+
+2015-\>2020. Did we add/lose ag land acreage between 2015 and 2020?
+
+```{r}
+sum_2015_ac <- sum(ag_2015$acreage)
+sum_2020_ac <- sum(ag_2020$acreage)
+
+sum_2015_ac - sum_2020_ac
+```
+
+We lost 27,033 acres of agriculture land.
+
+#### What is this land now being used for?
+
+one idea, is a map showing the loss of ag land between 2015 and 2020.
+
+ag land ownership.
+
+What type of agriculture/crop had the most loss?
+
+Types of visualizations to answer these questions:
+
+maps:
+
+Diagrams:
+
+Sankey diagrams
