@@ -1,0 +1,45 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+library(sf) 
+library(here)
+library(tigris)
+library(mapview)
+library(tidycensus)
+```
+
+```{r}
+oahu_solar <- st_read(here("data/oahu_solar_dedup_simple.geojson"))
+```
+
+```{r}
+mapview(oahu_solar)
+```
+
+```{r}
+oahu_median_household_income <- get_acs(geography="tract", 
+                                        variable= "B19013_001",
+                                        state= "HI",
+                                        county= "Honolulu",
+                                        geometry=TRUE, 
+                                        year=2022)
+```
+
+```{r}
+mapview(oahu_median_household_income, zcol="estimate" )
+```
+
+```{r}
+ggplot(oahu_median_household_income, aes(x=moe, y=estimate))+
+  geom_point() +
+  geom_smooth(method="lm")
+```
+
+Need to sum polygons of solar into the tract level. Using sf package.
+
+learn to do what can with these maps. then use Ai responsibly to help fill knowledge gaps. for example, be specific with query. check that you do what you meant to do.

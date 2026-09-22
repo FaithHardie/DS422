@@ -57,7 +57,9 @@ one idea, is a map showing the loss of ag land between 2015 and 2020.
 
 ag land ownership.
 
-What type of agriculture/crop had the most loss?
+What type of agriculture/crop had the most loss between 2015 and 2020?
+
+What soil type is the ag land on?
 
 Types of visualizations to answer these questions:
 
