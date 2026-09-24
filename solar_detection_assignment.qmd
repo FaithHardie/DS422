@@ -11,6 +11,7 @@ library(here)
 library(tigris)
 library(mapview)
 library(tidycensus)
+library(leafsync)
 ```
 
 ```{r}
@@ -43,3 +44,118 @@ ggplot(oahu_median_household_income, aes(x=moe, y=estimate))+
 Need to sum polygons of solar into the tract level. Using sf package.
 
 learn to do what can with these maps. then use Ai responsibly to help fill knowledge gaps. for example, be specific with query. check that you do what you meant to do.
+
+package sf in R, head() data sets,
+
+what other ways can we tactfully give clause the information it needs to aid us in our assignment, responsibly?
+
+remember question is: (sort of) is there a relationship between median income and solar detection in Oahu at the census tract level?"
+
+sf functions cheat sheet from the SF package: <https://github.com/rstudio/cheatsheets/blob/main/sf.pdf>
+
+Give: both data head(). packages to use. Functions we want to utlize.
+
+ask: Using (insert sf functions), how can I sum the polygons of solar that are currently at the county level into the tract level, that matches the polygons of tract level of the median household income data?
+
+build check to make sure we're doing what we want to do
+
+```{r}
+head(oahu_solar)
+```
+
+Start of Claude assisted analysis:
+
+what it caught: Connors caught the 68 empty from oahu_solar. Mine (sonnet, connor is using opus) did not.
+
+```{r}
+sum(is.na(oahu_solar$area_m2)) #checking for missing values 
+```
+
+```{r}
+# drop rows with empty geometries, then align CRS, storing as a new object
+oahu_joined <- oahu_solar %>%
+  filter(!st_is_empty(geometry))
+
+oahu_joined <- st_transform(oahu_joined, st_crs(oahu_median_household_income))
+
+# confirm they match
+st_crs(oahu_joined) == st_crs(oahu_median_household_income)
+nrow(oahu_joined)  # sanity check: should be 68 fewer than nrow(oahu_solar)
+nrow(oahu_solar)
+```
+
+```{r}
+sum(is.na(oahu_solar$area_m2))
+nrow(oahu_solar)
+nrow(oahu_joined)
+
+##note revisit claude mistake
+```
+
+Next claude chunk.
+
+```{r}
+# repair invalid geometries, then align CRS, storing as a new object
+oahu_joined <- st_make_valid(oahu_solar)
+oahu_joined <- st_transform(oahu_joined, st_crs(oahu_median_household_income))
+
+# confirm fix and CRS match
+sum(!st_is_valid(oahu_joined))  # should be 0
+st_crs(oahu_joined) == st_crs(oahu_median_household_income)
+nrow(oahu_joined)  # should equal nrow(oahu_solar), nothing dropped
+```
+
+```{r}
+# reduce each solar polygon to a single representative point
+oahu_points <- st_centroid(oahu_joined)
+
+# join each point to the tract polygon it falls within
+oahu_points_joined <- st_join(oahu_points, oahu_median_household_income, join = st_intersects, left = TRUE)
+
+# sanity checks
+sum(is.na(oahu_points_joined$GEOID))
+nrow(oahu_points_joined)
+```
+
+```{r}
+# drop points that didn't fall inside any tract
+oahu_points_joined <- oahu_points_joined %>%
+  filter(!is.na(GEOID))
+
+# sum solar area by tract
+oahu_tract_totals <- oahu_points_joined %>%
+  st_drop_geometry() %>%
+  group_by(GEOID) %>%
+  summarise(total_solar_area_m2 = sum(area_m2))
+
+nrow(oahu_tract_totals)
+```
+
+Note from claude: "One thing to flag before the next step: `nrow(oahu_tract_totals)` will almost certainly come back lower than the total number of tracts in `oahu_median_household_income`. That's because this table only contains tracts that had at least one solar detection. Tracts with zero detections simply won't appear here at all, not as a row with `total_solar_area_m2 = 0`, but as a missing row entirely. When we join this back to the income data in the next step, that distinction matters a lot for your regression, since a tract with genuinely no solar panels needs to show up as 0, not silently vanish from the dataset." \
+\
+
+```{r}
+# join solar totals onto every tract, filling missing tracts with 0
+oahu_final <- oahu_median_household_income %>%
+  left_join(oahu_tract_totals, by = "GEOID") %>%
+  mutate(total_solar_area_m2 = replace_na(total_solar_area_m2, 0))
+
+sum(is.na(oahu_final$total_solar_area_m2))
+nrow(oahu_final)
+nrow(oahu_median_household_income)
+```
+
+I asked for this next step to specifically use map view. After this step, I will ask claude what to use for my analysis. To do this I had to add the leafsync library to sync my two maps.\
+
+```{r}
+# build one map colored by income, one colored by solar area
+map_income <- mapview(oahu_final, zcol = "estimate", layer.name = "Median Household Income")
+map_solar <- mapview(oahu_final, zcol = "total_solar_area_m2", layer.name = "Total Solar Area (m2)")
+
+# link them so panning/zooming one moves both
+sync(map_income, map_solar)
+```
+
+I dont think this is the best analysis tool
+
+so moving on
