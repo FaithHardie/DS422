@@ -19,7 +19,7 @@ oahu_solar <- st_read(here("data/oahu_solar_dedup_simple.geojson"))
 ```
 
 ```{r}
-mapview(oahu_solar)
+#mapview(oahu_solar)
 ```
 
 ```{r}
@@ -131,7 +131,7 @@ oahu_tract_totals <- oahu_points_joined %>%
 nrow(oahu_tract_totals)
 ```
 
-Note from claude: "One thing to flag before the next step: `nrow(oahu_tract_totals)` will almost certainly come back lower than the total number of tracts in `oahu_median_household_income`. That's because this table only contains tracts that had at least one solar detection. Tracts with zero detections simply won't appear here at all, not as a row with `total_solar_area_m2 = 0`, but as a missing row entirely. When we join this back to the income data in the next step, that distinction matters a lot for your regression, since a tract with genuinely no solar panels needs to show up as 0, not silently vanish from the dataset." \
+Note from claude: "One thing to flag before the next step: `nrow(oahu_tract_totals)` will almost certainly come back lower than the total number of tracts in `oahu_median_household_income`. That's because this table only contains tracts that had at least one solar detection. Tracts with zero detections simply won't appear here at all, not as a row with `total_solar_area_m2 = 0`, but as a missing row entirely. When we join this back to the income data in the next step, that distinction matters a lot for your regression, since a tract with genuinely no solar panels needs to show up as 0, not silently vanish from the dataset."\
 \
 
 ```{r}
@@ -158,4 +158,66 @@ sync(map_income, map_solar)
 
 I dont think this is the best analysis tool
 
+But what I can gather from this visually is there is not a strong relationship betwen solar and median income
+
 so moving on
+
+```{r}
+# compute land area per tract and build a normalized solar coverage ratio
+oahu_final <- oahu_final %>%
+  mutate(
+    land_area_m2 = as.numeric(st_area(geometry)),
+    solar_coverage_ratio = total_solar_area_m2 / land_area_m2
+  )
+
+summary(oahu_final$land_area_m2)
+summary(oahu_final$solar_coverage_ratio)
+```
+
+```{r}
+max(oahu_final$solar_coverage_ratio)
+sum(oahu_final$land_area_m2 < 1000)  # flag any near-zero-land tracts
+```
+
+```{r}
+oahu_final %>%
+  st_drop_geometry() %>%
+  filter(land_area_m2 < 1000) %>%
+  select(GEOID, NAME, estimate, total_solar_area_m2, land_area_m2, solar_coverage_ratio)
+```
+
+Claude determined this is a water-only area. So it is probably best to drop it so it does not skew the results. since there is no median income for an area where there is no households. (i assume.)
+
+```{r}
+sum(is.na(oahu_final$estimate))
+```
+
+```{r}
+oahu_final %>%
+  st_drop_geometry() %>%
+  filter(is.na(estimate)) %>%
+  select(GEOID, NAME, land_area_m2, total_solar_area_m2)
+```
+
+Tracts that start with 98 and 99 are special land use areas or military installations. The other tracks, may be low population areas.
+
+Should these low populated areas be included in my analysis, or should I exclude them?
+
+```{r}
+# isolate the tracts with missing income estimates
+oahu_excluded <- oahu_median_household_income %>%
+  filter(is.na(estimate))
+
+nrow(oahu_excluded)  # should be 19
+
+mapview(oahu_excluded, zcol = "NAME", legend = FALSE)
+
+mapview(oahu_median_household_income, alpha.regions = 0.1, legend = FALSE) +
+  mapview(oahu_excluded, col.regions = "red", legend = FALSE)
+```
+
+This is a map of the arlibrary(geosam) geosam_install()eas that were flagged for low population or military installations. I will keep them in my analysis, because
+
+```{r}
+
+```
