@@ -38,7 +38,7 @@ ggplot(ag_2015, aes(x=acreage)) +
   facet_wrap(~island, scales="free_y")
 ```
 
-## Questions: 
+## Questions:
 
 2015-\>2020. Did we add/lose ag land acreage between 2015 and 2020?
 

@@ -1,0 +1,177 @@
+---
+title: "Isochrones"
+format: html
+editor: visual
+---
+
+An **isochrone** is a line or polygon on a map that connects all points reachable from a specific starting location within a set amount of time
+
+[Inspiration from Kyle Walker](https://walker-data.com/posts/accessibility-surface/)
+
+### Libraries
+
+```{r}
+library(mapboxapi)
+library(leaflet)
+library(mapview)
+library(here)
+library(sf)
+library(tidyverse)
+```
+
+### Create Isochrone
+
+```{r}
+isos <- mb_isochrone(
+  location = "One Bowerman Dr, Beaverton, OR 97005",
+  profile = "driving",
+  time = 1:45
+)
+```
+
+```{r}
+mapview(isos, zcol = "time")
+```
+
+```{r}
+library(sf)
+library(fasterize)
+
+isos_proj <- st_transform(isos, 32618)
+
+template <- raster(isos_proj, resolution = 100)
+
+iso_surface <- fasterize(isos_proj, template, field = "time", fun = "min")
+
+iso_surface
+pal <- colorNumeric("plasma", isos$time, na.color = "transparent")
+
+nike_map <- leaflet() %>%
+  addMapboxTiles(style_id = "light-v9",
+                 username = "mapbox",
+                 scaling_factor = "0.5x") %>%
+  addRasterImage(iso_surface, colors = pal, opacity = 0.5) %>%
+  addLegend(values = isos$time, pal = pal,
+            title = "Drive-time from<br>Nike HQ")
+
+nike_map
+```
+
+```{r}
+nike_icon <- makeIcon(
+  iconUrl = "https://nike.com/favicon.ico",
+  iconWidth = 25,
+  iconHeight = 25
+)
+
+nike_hq <- mb_geocode("One Bowerman Dr, Beaverton, OR 97005")
+
+nike_map %>%
+  addMarkers(lng = nike_hq[1], lat = nike_hq[2], icon = nike_icon)
+```
+
+### Your turn - Recreate for Chaminade
+
+```{r}
+chaminade_isos <- mb_isochrone(
+  location = "3140 Waialae Ave, Honolulu, HI 96816",
+  profile = "driving",
+  time = 1:30
+)
+```
+
+```{r}
+mapview(chaminade_isos, zcol = "time")
+```
+
+```{r}
+chaminade_proj <- st_transform(chaminade_isos, 32618)
+
+template <- raster(chaminade_proj, resolution = 100)
+
+chaminade_surface <- fasterize(chaminade_proj, template, field = "time", fun = "min")
+
+chaminade_surface
+pal <- colorNumeric("plasma", chaminade_isos$time, na.color = "transparent")
+
+chaminade_map <- leaflet() %>%
+  addMapboxTiles(style_id = "light-v9",
+                 username = "mapbox",
+                 scaling_factor = "0.5x") %>%
+  addRasterImage(chaminade_surface, colors = pal, opacity = 0.5) %>%
+  addLegend(values = chaminade_isos$time, pal = pal,
+            title = "Drive-time from<br>Chaminade University")
+
+chamiande_icon <- makeIcon(
+  iconUrl = "https://queens.org/favicon.ico",
+  iconWidth = 25,
+  iconHeight = 25
+)
+
+chamiande <- mb_geocode("3140 Waialae Ave, Honolulu, HI 96816")
+
+chaminade_map |> 
+  addMarkers(lng = chamiande[1], lat = chamiande[2], icon = chamiande_icon)
+```
+
+### Lets go further
+
+Question: Can we make an accessibility surfaces map for trauma centers, ER's, hospitals, fire stations etc. Maybe combine all of them into one shiny app. Let's strategise and design...
+
+**App Design:**
+
+- Fire stations: mb_isochrone works well
+- Ambulance:
+- Shelters:
+  - Can't go base off travel time for island-wide emergency situations due to possible increase in traffic
+- **Flood risk zones to a flood free zone (Ashley & Faith H.)**
+  - Using polygons to map high-risk flood zones and low-risk flood zones
+    - [Tsunami Evacuation Zones](https://geoportal.hawaii.gov/datasets/HiStateGIS::tsunami-evacuation-zones/explore?location=21.410979%2C-158.148541%2C13)
+    - [Extreme Tsunami Evacuation Zones](https://geoportal.hawaii.gov/datasets/extreme-tsunami-evacuation-zones/explore?location=21.410528%2C-158.148604%2C13)
+    - [Oahu addresses with geometry](https://honolulu-cchnl.opendata.arcgis.com/datasets/address-points-1/explore?location=21.481900%2C-157.964450%2C10&showTable=true)
+  - depart_at
+  - Could reference the date: July 29, 2025 \@ 2:45 PM HST — This was when statewide tsunami warning was announced
+    - Should be specified as an ISO 8601 date/time, e.g. `"2025-07-29T14:45"`
+  - Think about who this would be for — I think it would be for individuals who live in high risk tsunami zones
+- Hospitals, trauma centers, etc.
+- Police stations
+
+### Read in Tsunami Zones Data
+
+```{r}
+tsunami_zones <- st_read(here("data/Tsunami_Evacuation_Zones.geojson"))
+extreme_tsunami_zones <- st_read(here("data/Extreme_Tsunami_Evacuation_Zones.geojson"))
+oahu_adress <- st_read(here("data/oahu_address.geojson"))
+```
+
+### Filter Polygons to Oahu
+
+```{r}
+oahu_tsunami_zones <- tsunami_zones |> 
+  filter(island == "OAHU")
+
+oahu_extreme_tsunami_zones <- extreme_tsunami_zones |> 
+  filter(island == "OAHU")
+
+
+```
+
+```{r}
+mapview(oahu_tsunami_zones)
+```
+
+```{r}
+mapview(oahu_extreme_tsunami_zones)
+```
+
+With the address data from oahu addresses, can we create a new dataframe with only the addresses that have the geometries in the tsunami zones from the tsunami zone geometries and the extreme tsunami zone geometries?
+
+Should we combine tsunami and extreme tsunami into 1 polygon
+
+Yes, but we keep the distinction . one isochrme, but distict boundaries
+
+The idea is that we're mapping the distance from x address on a given day (tsunami day) and asking how far given this time of this day, how far am I from my address to safety? the overlay of the tsunami zones is what gives context to our design
+
+```{r}
+head(oahu_adress)
+```
