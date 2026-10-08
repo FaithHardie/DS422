@@ -17,6 +17,8 @@ library(mapview)
 library(here)
 library(sf)
 library(tidyverse)
+library(mapgl)
+library(tigris)
 ```
 
 ### Create Isochrone
@@ -172,6 +174,274 @@ Yes, but we keep the distinction . one isochrme, but distict boundaries
 
 The idea is that we're mapping the distance from x address on a given day (tsunami day) and asking how far given this time of this day, how far am I from my address to safety? the overlay of the tsunami zones is what gives context to our design
 
+### Slimming address data
+
 ```{r}
-head(oahu_adress)
+address1 <- oahu_adress |>
+  select(address_id, full_number, streetname, city, zip) |>
+  filter(!st_is_empty(geometry)) 
+
+address1
+nrow(address1)
+```
+
+### preparing tsunami layers
+
+from looking at the zones earlier I saw that in the extreme tsunami zone instead of being 1 polygon it was split up. so I merge it into one using st_union so when I check my addresses against the tsunami layer, instead of checking it against 20+ polygons it just checks against 1.
+
+```{r}
+tsunami1 <- oahu_tsunami_zones |>
+  st_make_valid() |>
+  summarise(geometry = st_union(geometry))
+
+extreme1 <- oahu_extreme_tsunami_zones |>
+  st_make_valid() |>
+  summarise(geometry = st_union(geometry))
+
+tsunami1
+extreme1
+```
+
+I also keep the two zones seperate objects because I want to be able to tell them apart on my shinyapp. Their geometry also dont overlapp at all so I know no address can be inside both at the same time.
+
+### labeling every address by zone 
+
+```{r}
+address_zones <- address1 |>
+  mutate(
+    in_tsunami = lengths(st_intersects(geometry, tsunami1)) > 0,
+    in_extreme = lengths(st_intersects(geometry, extreme1)) > 0,#checking each adress against tsunami zone, lengths >0 turning each into true(isndie) or false(outside) zone for both extreme and regular zone
+    zone = case_when(
+      in_tsunami ~ "Tsunami Evacuation Zone",
+      in_extreme ~ "Extreme Tsunami Evacuation Zone",
+      TRUE       ~ "Outside evacuation zones"
+    )
+  ) #turns the two columns of true/false into one label, and true labels everything outside of evacuation zones
+
+address_zones |>
+  st_drop_geometry() |>
+  count(in_tsunami, in_extreme, zone) #removes geometry column and turns sf into regular df, address zones still has all its points, for cleaness
+```
+
+time to start map stuff
+
+### adding a search label and map the addresses
+
+```{r}
+
+# Readable address label for searching and tooltips
+address_zones <- address_zones |>
+  mutate(search_label = paste0(full_number, " ", streetname, ", ", city, " ", zip)) #this makes address parts one string, full_number keeps hyphen for search box searches later.
+
+# Combine the two zone layers into one, with a label column
+zones_map <- bind_rows(
+  tsunami1 |> mutate(zone = "Tsunami Evacuation Zone"),
+  extreme1 |> mutate(zone = "Extreme Tsunami Evacuation Zone")
+) #stacks two zones into one two row layer for easier coloring
+
+zone_vals <- c("Tsunami Evacuation Zone",
+               "Extreme Tsunami Evacuation Zone",
+               "Outside evacuation zones")
+zone_cols <- c("#d7301f", "#fc8d59", "#9e9e9e") #stores labels and colors so legend polygons and points all match. red for standard zone, orange for extreme, and the gray for outside
+
+mapboxgl(bounds = zones_map) |>
+  add_fill_layer(
+    id = "zones",
+    source = zones_map,
+    fill_color = match_expr("zone", values = zone_vals[1:2], stops = zone_cols[1:2]),
+    fill_opacity = 0.35 #changes opacity so roads are visible
+  ) |>
+  add_circle_layer(
+    id = "addresses",
+    source = address_zones,
+    circle_color = match_expr("zone", values = zone_vals, stops = zone_cols),
+    circle_radius = 1.5,
+    tooltip = "search_label" #draws addresses as small dots
+  ) |>
+  add_legend(
+    "Evacuation zone",
+    values = zone_vals,
+    colors = zone_cols,
+    type = "categorical"
+  )
+```
+
+### testing traffic isochrome for one address 
+
+```{r}
+set.seed(422)
+test_addr <- address_zones |>
+  filter(zone == "Tsunami Evacuation Zone") |>
+  slice_sample(n = 1) #choosing random test address
+
+test_addr$search_label
+
+
+tsunami_day <- "2026-10-13T15:00" #chosen time based on warning
+
+test_iso <- mb_isochrone(
+  test_addr,
+  time = c(5, 10, 15, 20),
+  profile = "driving-traffic",
+  depart_at = tsunami_day 
+)
+
+test_iso
+```
+
+### rings over zones
+
+```{r}
+ring_cols <- c("#1a9850", "#91cf60", "#fee08b", "#4575b4")
+
+mapboxgl(bounds = test_iso) |>
+  add_fill_layer(
+    id = "zones",
+    source = zones_map,
+    fill_color = match_expr("zone", values = zone_vals[1:2], stops = zone_cols[1:2]),
+    fill_opacity = 0.35
+  ) |>
+  add_line_layer(
+    id = "rings",
+    source = test_iso,
+    line_color = match_expr("time", values = c(5, 10, 15, 20), stops = ring_cols),
+    line_width = 2
+  ) |>
+  add_markers(data = test_addr) |>
+  add_legend(
+    "Drive time (minutes)",
+    values = c("5", "10", "15", "20"),
+    colors = ring_cols,
+    type = "categorical"
+  )
+```
+
+```{r}
+# Both zones together: everywhere unsafe in an extreme warning
+unsafe_all <- st_union(c(st_geometry(tsunami1), st_geometry(extreme1)))
+
+# How much of a ring (in m²) lies outside an unsafe area
+area_outside <- function(rings, unsafe) {
+  sapply(seq_len(nrow(rings)), function(i) {
+    left <- st_difference(st_geometry(rings)[i], st_geometry(unsafe))
+    if (length(left) == 0) 0 else sum(as.numeric(st_area(left)))
+  })
+}
+
+test_iso <- arrange(test_iso, time)
+
+test_iso$m2_outside_tsunami <- area_outside(test_iso, tsunami1)
+test_iso$m2_outside_all     <- area_outside(test_iso, unsafe_all)
+
+st_drop_geometry(test_iso)
+```
+
+```{r}
+safe_part_5 <- st_difference(st_geometry(test_iso)[1], unsafe_all)
+
+mapboxgl(bounds = test_iso[1, ]) |>
+  add_fill_layer(id = "zones", source = zones_map,
+                 fill_color = match_expr("zone", values = zone_vals[1:2], stops = zone_cols[1:2]),
+                 fill_opacity = 0.35) |>
+  add_fill_layer(id = "safe5", source = st_sf(geometry = safe_part_5),
+                 fill_color = "#1a9850", fill_opacity = 0.6) |>
+  add_markers(data = test_addr)
+```
+
+fixing spill over
+
+```{r}
+# Oahu's land area, clipped to the coastline
+oahu_land <- counties(state = "HI", cb = TRUE) |>
+  filter(NAME == "Honolulu") |>
+  st_transform(4326) |>
+  st_make_valid()
+
+# Safe ground for each warning type
+safe_standard <- st_difference(st_geometry(oahu_land), st_geometry(tsunami1))
+safe_extreme  <- st_difference(st_geometry(oahu_land), unsafe_all)
+
+# How much of a ring (in m²) overlaps safe ground
+area_safe <- function(rings, safe) {
+  sapply(seq_len(nrow(rings)), function(i) {
+    hit <- st_intersection(st_geometry(rings)[i], safe)
+    if (length(hit) == 0) 0 else sum(as.numeric(st_area(hit)))
+  })
+}
+
+test_iso$m2_safe_standard <- area_safe(test_iso, safe_standard)
+test_iso$m2_safe_extreme  <- area_safe(test_iso, safe_extreme)
+
+# Compare the old and new measurements
+test_iso |>
+  st_drop_geometry() |>
+  select(time, m2_outside_tsunami, m2_safe_standard, m2_outside_all, m2_safe_extreme)
+```
+
+```{r}
+# Smallest ring time that reaches meaningful safe land
+first_safe <- function(rings, safe, min_area = 5000) {
+  rings <- arrange(rings, time)
+  m2 <- area_safe(rings, safe)
+  hits <- rings$time[m2 > min_area]
+  if (length(hits) > 0) min(hits) else NA_real_
+}
+
+minutes_to_safety <- function(addr, depart_at = tsunami_day) {
+  
+  # Already safe: no API call needed
+  if (addr$zone == "Outside evacuation zones") {
+    return(tibble(exit_standard = 0, exit_extreme = 0))
+  }
+  
+  get_rings <- function(times) {
+    mb_isochrone(addr, time = times, profile = "driving-traffic", depart_at = depart_at)
+  }
+  
+  # Main call: 5, 10, 15, 20 minute rings
+  rings <- get_rings(c(5, 10, 15, 20))
+  
+  exit_standard <- if (addr$zone == "Tsunami Evacuation Zone") first_safe(rings, safe_standard) else 0
+  exit_extreme  <- first_safe(rings, safe_extreme)
+  
+  # Sharpen the answer if safety is reached within 5 minutes
+  if (isTRUE(exit_standard == 5) || isTRUE(exit_extreme == 5)) {
+    fine <- get_rings(c(1, 2, 3, 4))
+    if (isTRUE(exit_standard == 5)) exit_standard <- coalesce(first_safe(fine, safe_standard), 5)
+    if (isTRUE(exit_extreme == 5))  exit_extreme  <- coalesce(first_safe(fine, safe_extreme), 5)
+  }
+  
+  # Extend the search if safety isn't reached within 20 minutes
+  if (is.na(exit_standard) || is.na(exit_extreme)) {
+    long <- get_rings(c(30, 40, 50, 60))
+    if (is.na(exit_standard)) exit_standard <- first_safe(long, safe_standard)
+    if (is.na(exit_extreme))  exit_extreme  <- first_safe(long, safe_extreme)
+  }
+  
+  tibble(exit_standard = exit_standard, exit_extreme = exit_extreme)
+}
+
+minutes_to_safety(test_addr)
+```
+
+this model uses normal traffic instead of the evacuation time. it also measures time to "safe" land, not a destination. this isnt accruate. people dont travel to a spot of land, they travel to a destination.
+
+### testing zones
+
+```{r}
+set.seed(422)
+
+test_extreme <- address_zones |>
+  filter(zone == "Extreme Tsunami Evacuation Zone") |>
+  slice_sample(n = 1)
+
+test_outside <- address_zones |>
+  filter(zone == "Outside evacuation zones") |>
+  slice_sample(n = 1)
+
+test_extreme$search_label
+minutes_to_safety(test_extreme)
+
+test_outside$search_label
+minutes_to_safety(test_outside)
 ```
