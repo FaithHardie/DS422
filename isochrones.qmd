@@ -299,13 +299,13 @@ mapboxgl(bounds = test_iso) |>
     id = "zones",
     source = zones_map,
     fill_color = match_expr("zone", values = zone_vals[1:2], stops = zone_cols[1:2]),
-    fill_opacity = 0.35
+    fill_opacity = 0.9
   ) |>
-  add_line_layer(
+  add_fill_layer(
     id = "rings",
-    source = test_iso,
-    line_color = match_expr("time", values = c(5, 10, 15, 20), stops = ring_cols),
-    line_width = 2
+    source = arrange(test_iso, desc(time)),
+    fill_color = match_expr("time", values = c(5, 10, 15, 20), stops = ring_cols),
+    fill_opacity = 0.6
   ) |>
   add_markers(data = test_addr) |>
   add_legend(
@@ -316,132 +316,6 @@ mapboxgl(bounds = test_iso) |>
   )
 ```
 
-```{r}
-# Both zones together: everywhere unsafe in an extreme warning
-unsafe_all <- st_union(c(st_geometry(tsunami1), st_geometry(extreme1)))
+this mdel uses normal traffic instead of the evacuation time. it also measures time to "safe" land, not a destination. this isnt accruate. people dont travel to a spot of land, they travel to a destination.
 
-# How much of a ring (in m²) lies outside an unsafe area
-area_outside <- function(rings, unsafe) {
-  sapply(seq_len(nrow(rings)), function(i) {
-    left <- st_difference(st_geometry(rings)[i], st_geometry(unsafe))
-    if (length(left) == 0) 0 else sum(as.numeric(st_area(left)))
-  })
-}
-
-test_iso <- arrange(test_iso, time)
-
-test_iso$m2_outside_tsunami <- area_outside(test_iso, tsunami1)
-test_iso$m2_outside_all     <- area_outside(test_iso, unsafe_all)
-
-st_drop_geometry(test_iso)
-```
-
-```{r}
-safe_part_5 <- st_difference(st_geometry(test_iso)[1], unsafe_all)
-
-mapboxgl(bounds = test_iso[1, ]) |>
-  add_fill_layer(id = "zones", source = zones_map,
-                 fill_color = match_expr("zone", values = zone_vals[1:2], stops = zone_cols[1:2]),
-                 fill_opacity = 0.35) |>
-  add_fill_layer(id = "safe5", source = st_sf(geometry = safe_part_5),
-                 fill_color = "#1a9850", fill_opacity = 0.6) |>
-  add_markers(data = test_addr)
-```
-
-fixing spill over
-
-```{r}
-# Oahu's land area, clipped to the coastline
-oahu_land <- counties(state = "HI", cb = TRUE) |>
-  filter(NAME == "Honolulu") |>
-  st_transform(4326) |>
-  st_make_valid()
-
-# Safe ground for each warning type
-safe_standard <- st_difference(st_geometry(oahu_land), st_geometry(tsunami1))
-safe_extreme  <- st_difference(st_geometry(oahu_land), unsafe_all)
-
-# How much of a ring (in m²) overlaps safe ground
-area_safe <- function(rings, safe) {
-  sapply(seq_len(nrow(rings)), function(i) {
-    hit <- st_intersection(st_geometry(rings)[i], safe)
-    if (length(hit) == 0) 0 else sum(as.numeric(st_area(hit)))
-  })
-}
-
-test_iso$m2_safe_standard <- area_safe(test_iso, safe_standard)
-test_iso$m2_safe_extreme  <- area_safe(test_iso, safe_extreme)
-
-# Compare the old and new measurements
-test_iso |>
-  st_drop_geometry() |>
-  select(time, m2_outside_tsunami, m2_safe_standard, m2_outside_all, m2_safe_extreme)
-```
-
-```{r}
-# Smallest ring time that reaches meaningful safe land
-first_safe <- function(rings, safe, min_area = 5000) {
-  rings <- arrange(rings, time)
-  m2 <- area_safe(rings, safe)
-  hits <- rings$time[m2 > min_area]
-  if (length(hits) > 0) min(hits) else NA_real_
-}
-
-minutes_to_safety <- function(addr, depart_at = tsunami_day) {
-  
-  # Already safe: no API call needed
-  if (addr$zone == "Outside evacuation zones") {
-    return(tibble(exit_standard = 0, exit_extreme = 0))
-  }
-  
-  get_rings <- function(times) {
-    mb_isochrone(addr, time = times, profile = "driving-traffic", depart_at = depart_at)
-  }
-  
-  # Main call: 5, 10, 15, 20 minute rings
-  rings <- get_rings(c(5, 10, 15, 20))
-  
-  exit_standard <- if (addr$zone == "Tsunami Evacuation Zone") first_safe(rings, safe_standard) else 0
-  exit_extreme  <- first_safe(rings, safe_extreme)
-  
-  # Sharpen the answer if safety is reached within 5 minutes
-  if (isTRUE(exit_standard == 5) || isTRUE(exit_extreme == 5)) {
-    fine <- get_rings(c(1, 2, 3, 4))
-    if (isTRUE(exit_standard == 5)) exit_standard <- coalesce(first_safe(fine, safe_standard), 5)
-    if (isTRUE(exit_extreme == 5))  exit_extreme  <- coalesce(first_safe(fine, safe_extreme), 5)
-  }
-  
-  # Extend the search if safety isn't reached within 20 minutes
-  if (is.na(exit_standard) || is.na(exit_extreme)) {
-    long <- get_rings(c(30, 40, 50, 60))
-    if (is.na(exit_standard)) exit_standard <- first_safe(long, safe_standard)
-    if (is.na(exit_extreme))  exit_extreme  <- first_safe(long, safe_extreme)
-  }
-  
-  tibble(exit_standard = exit_standard, exit_extreme = exit_extreme)
-}
-
-minutes_to_safety(test_addr)
-```
-
-this model uses normal traffic instead of the evacuation time. it also measures time to "safe" land, not a destination. this isnt accruate. people dont travel to a spot of land, they travel to a destination.
-
-### testing zones
-
-```{r}
-set.seed(422)
-
-test_extreme <- address_zones |>
-  filter(zone == "Extreme Tsunami Evacuation Zone") |>
-  slice_sample(n = 1)
-
-test_outside <- address_zones |>
-  filter(zone == "Outside evacuation zones") |>
-  slice_sample(n = 1)
-
-test_extreme$search_label
-minutes_to_safety(test_extreme)
-
-test_outside$search_label
-minutes_to_safety(test_outside)
-```
+### 
