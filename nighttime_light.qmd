@@ -389,8 +389,7 @@ map_change(z_score_storm1, "Radiance Z-Score",
 ```
 
 ```{r}
-map_change(z_score_storm2, "Radiance Z-Score",
-           "Second Kona Low storm vs. baseline", "Z-score")
+map_change(z_score_storm2, "Recorded Radiance Change During Second Kona Low Storm on Oahu", "Second Kona Low storm vs. baseline", "Z-score")
 ```
 
 The Storm 2 z score map concentrates its strongest negative values on the Windward side and the North Shore.
