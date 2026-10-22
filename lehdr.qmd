@@ -322,3 +322,7 @@ fig2 <- ggplot(change_map_fl) +
 
 fig2
 ```
+
+liberty county florida: almost half earning under 50k , rural and limited job diversity which can be reflected on this map
+
+general trends is more rural counties in florida have seen a decline in income
