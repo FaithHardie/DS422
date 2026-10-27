@@ -1,0 +1,133 @@
+---
+title: "Water Quality"
+format: html
+editor: visual
+---
+
+### Welcome
+
+Throughout DS 422, we have worked with primarily very clean data. This lab has 2 main objectives:
+
+1.  Practice how to clean some spatial data
+2.  More importantly, explore how to use our geocomputational minds to look at a challenge that is seeming more apparent and serious over time
+    - Why are people getting sick from going surfing after it rains, what can we do to describe this problem spatially and begin to consider solutions
+
+### Data
+
+<https://eha-cloud.doh.hawaii.gov/cwb/#!/landing>
+
+Download here: <https://eha-cloud.doh.hawaii.gov/cwb/#!/sample-test-result/list>
+
+**What is the BEACH Act?**
+
+:   The Beaches Environmental Assessment and Coastal Health (BEACH) Act, promulgated in 2000 is an amendment to the federal Clean Water Act (CWA) which establishes national standard criteria for coastal recreational water monitoring and public notification of possible pollution within coastal recreational waters (beaches). The BEACH Act authorizes the EPA to provide funding to eligible states to implement a water monitoring and public notification program. The BEACH Act only applies to coastal recreational waters (marine beaches) and explicitly excludes inland waters, including waters upstream from the mouth of a river or stream.
+
+Enterococci levels **greater than 130/100 mL** indicates that there may be an increased probability of risk of illness
+
+### Libraries
+
+```{r}
+library(tidyverse)
+library(here)
+library(sf)
+library(janitor)
+library(mapview)
+library(lubridate)
+library(naniar)
+```
+
+```{r}
+wm_data <- read_csv(here("data/water_monitoring.csv"))
+```
+
+### Data Cleaning
+
+Let's list things in the data that will need cleaning/attention before we can use this for analysis and mapping
+
+- summarizing NAS:
+
+  - salinity
+
+  - temperature
+
+  - dissolved oxygen concentration
+
+  - dissolved oxygen saturation
+
+  - turbidity
+
+  - ph
+
+  - field comments/observations (potentially not for use)
+
+- Keeping in mind multiple stations so need to group
+
+- final result column has \<\> , which r doesn't recognize
+
+- there is a pattern to different unit of measurements
+
+- one occurence of tmtc
+
+- dates and times in seperate column and not formatted
+
+- is this a spatial dataframe, we want geometries not lat and long
+
+- column names have spaces
+
+###  Cleaning 
+
+Starting with column names
+
+```{r}
+wm_data <- wm_data |> 
+  clean_names()
+```
+
+is this a spatial data frame?
+
+```{r}
+class(wm_data)
+```
+
+Can we make it a spatial dataframe?
+
+```{r}
+wm_data_sf <- wm_data |> 
+  st_as_sf(coords = c("longitude_decimal_degrees",
+           "latitude_decimal_degrees"), crs=4269)
+```
+
+filter data for just
+
+```{r}
+wm_data_sf_Enterococcus <- wm_data_sf |> 
+  filter(parameter =="Enterococcus")
+```
+
+should I use na_omit?
+
+convert_to_date
+
+```{r}
+wm_data_sf_Enterococcus <- wm_data_sf_Enterococcus |> 
+  mutate(final_result_numeric = as.numeric(final_result))
+```
+
+```{r}
+wm_data_sf_Enterococcus_averages <- wm_data_sf_Enterococcus |> 
+  group_by(location_name) |> 
+  summarize(mean_final_result_numeric = mean(final_result_numeric, na.rm =TRUE 
+  ))
+```
+
+```{r}
+mapview(wm_data_sf_Enterococcus_averages, zcol="mean_final_result_numeric") 
+```
+
+Numeric values in final_result column
+
+```{r}
+wn_data_sf
+```
+
+### Analysis

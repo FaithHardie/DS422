@@ -348,7 +348,7 @@ map_change <- function(r, ttl, sub, lgd) {
   ggplot() +
     geom_spatraster(data = r) +
     geom_sf(data = roi_sf, fill = NA, color = "black", linewidth = 0.2) +
-    scale_fill_gradient2(low = "blue", mid = "white", high = "red",
+    scale_fill_gradient2(low = "black", mid = "white", high = "yellow",
                          midpoint = 0, limits = c(-lim, lim),
                          oob = scales::squish, na.value = "transparent",
                          name = lgd) +
@@ -389,7 +389,7 @@ map_change(z_score_storm1, "Radiance Z-Score",
 ```
 
 ```{r}
-map_change(z_score_storm2, "Recorded Radiance Change During Second Kona Low Storm on Oahu", "Second Kona Low storm vs. baseline", "Z-score")
+map_change(z_score_storm2, "Second Kona Low Storm Luminance Change Oahu", "Luminance change observed From March 19th-24th at 2am by 500m pixel", "Z-score")
 ```
 
 The Storm 2 z score map concentrates its strongest negative values on the Windward side and the North Shore.

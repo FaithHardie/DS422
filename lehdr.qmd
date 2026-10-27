@@ -326,3 +326,53 @@ fig2
 liberty county florida: almost half earning under 50k , rural and limited job diversity which can be reflected on this map
 
 general trends is more rural counties in florida have seen a decline in income
+
+```{r}
+wac_hi_panel <- grab_lodes(
+  state      = "HI",
+  year       = c(2012, 2022),
+  lodes_type = "wac",
+  job_type   = "JT00",
+  segment    = "S000",
+  agg_geo    = "tract"
+)
+
+change_hi <- compute_lodes_change(
+  wac_hi_panel,
+  geo_col      = "w_tract",
+  base_year    = 2012,
+  compare_year = 2022,
+  variables    = "C000"
+)
+```
+
+```{r}
+hi_geo <- tracts(state = "HI", county="Honolulu", year = 2022, cb =FALSE) %>%
+  mutate(GEOID = paste0(STATEFP, COUNTYFP)) %>%
+  select(GEOID, geometry)
+
+change_map_hi <- hi_geo %>%
+  left_join(change_hi, by = c("GEOID" = "w_tract")) |>
+  dplyr::filter(GEOID != "15003981200")
+
+```
+
+```{r}
+fig3 <- ggplot(change_map_hi) +
+  geom_sf(aes(fill = C000_pct_change), color = "white", linewidth = 0.3) +
+  scale_fill_distiller(
+    palette   = "RdYlBu",
+    direction = 1,
+    name      = "% change",
+    labels    = label_percent(accuracy = 1, scale = 1),
+    na.value  = "grey85"
+  ) +
+  labs(
+    title    = "Job growth by county, Hawaii, 2012\u20132022",
+    subtitle = "Percent change in total jobs (WAC, all job types)",
+    caption  = "Source: U.S. Census Bureau LODES via lehdr"
+  ) +
+  map_theme
+
+fig3
+```
